@@ -40,3 +40,114 @@ async def cmd_help(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         f"> limit → download link only  _(limit: {_LIMIT_NOTE})_\n\n"
         "*Example link:*\n"
         "`https://terabox.app/s/1HSEb8PZRUE7Z1Tvd3ZtT0g`",
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+# -------- LINK HANDLER --------
+async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (update.message.text or "").strip()
+    url = find_url_in_text(text)
+    if not url:
+        await update.message.reply_text("❌ Please send a valid TeraBox share link.")
+        return
+
+    if not is_valid_terabox_url(url):
+        await update.message.reply_text(
+            "❌ Not a supported TeraBox link. Use /help to see supported domains."
+        )
+        return
+
+    surl = extract_surl(url)
+    if not surl:
+        await update.message.reply_text("❌ Could not extract the share token from the URL.")
+        return
+
+    status_msg = await update.message.reply_text("⏳ Resolving link…")
+    data = cache_get(surl)
+    if data is None:
+        data = fetch_file_list(surl)
+        if not data.get("error"):
+            cache_set(surl, data)
+
+    if data.get("error"):
+        await status_msg.edit_text(f"❌ {data['error']}")
+        return
+
+    file_list = data.get("list", [])
+    if not file_list:
+        await status_msg.edit_text("❌ No files found. The link may be expired or private.")
+        return
+
+    for item in file_list[:5]:
+        filename  = item.get("server_filename", "Unknown")
+        file_size = int(item.get("size", 0))
+        dlink     = item.get("dlink", "")
+        thumbs    = item.get("thumbs", {})
+        thumb_url = thumbs.get("url3") or thumbs.get("url2") or thumbs.get("url1", "")
+
+        if not dlink:
+            await status_msg.edit_text(
+                f"⚠️ *{filename}*\nNo download link available for this file.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            continue
+
+        dl_keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("⬇️ Direct Download Link", url=dlink)]]
+        )
+
+        if thumb_url:
+            try:
+                await update.message.reply_photo(
+                    photo=thumb_url,
+                    caption=f"📁 *{filename}*\n📦 `{format_bytes(file_size)}`",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=dl_keyboard,
+                )
+            except Exception as exc:
+                logger.warning("Thumbnail send failed: %s", exc)
+                await update.message.reply_text(
+                    f"📁 *{filename}*\n📦 `{format_bytes(file_size)}`",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=dl_keyboard,
+                    disable_web_page_preview=True,
+                )
+        else:
+            await status_msg.edit_text(
+                f"📁 *{filename}*\n📦 `{format_bytes(file_size)}`",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=dl_keyboard,
+                disable_web_page_preview=True,
+            )
+
+        upload_status = await update.message.reply_text(
+            f"📤 Preparing to upload `{filename}`…",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+
+        await send_file(
+            bot=ctx.bot,
+            chat_id=update.effective_chat.id,
+            dlink=dlink,
+            filename=filename,
+            file_size=file_size,
+            status_msg=upload_status,
+        )
+
+# -------- MAIN BOT SETUP --------
+def main():
+    app = ApplicationBuilder().token(API_KEY).build()
+
+    # Command handlers
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("help", cmd_help))
+
+    # TeraBox link handler
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+
+    print("🤖 Terabox Bot is running…")
+    app.run_polling()
+
+# Run the bot
+if __name__ == "__main__":
+    main()
