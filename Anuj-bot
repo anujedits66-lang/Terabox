@@ -1,4 +1,17 @@
-your-repo/
-│── Dockerfile
-│── requirements.txt
-│── main.py
+TeraBox-Telegram/
+│
+├── Anuj-bot/                # Main bot folder (can contain bot logic and scripts)
+│   ├── __init__.py
+│   ├── bot.py               # Main bot logic
+│   ├── commands.py          # Bot commands
+│   └── utils.py             # Utility functions
+│
+├── config.py                # Configuration file (API keys, other settings)
+├── handlers.py              # Bot event handlers (commands, messages, etc.)
+├── main.py                  # Main entry point to run the bot
+├── Dockerfile               # Docker setup file for containerization
+├── Procfile                 # Required for platforms like Heroku
+├── requirements.txt         # Python dependencies
+├── runtime.txt              # Specifies the Python version (e.g., python-3.9.9)
+├── README.md                # Documentation for your project
+└── API_KEY                  # Contains the API key for the bot (secure file, don't expose publicly)
