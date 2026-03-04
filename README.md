@@ -17,5 +17,5 @@ A simple Telegram bot that downloads files from public links and sends them dire
 
 ```bash
 git clone https://github.com/anujedits66-lang/terabox.git
-cd YOUR_REPO
+cd terabox
 pip install -r requirements.txt
